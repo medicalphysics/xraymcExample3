@@ -55,6 +55,8 @@ set(DATA_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/data/ICRP145/MRCP_AM/MRCP_AM_media.dat"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/carm.stl"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/table.stl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/blanket.stl"
+    "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/ceilingShield.stl"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/exposureData/testExposure.csv"
 )
 
