@@ -26,7 +26,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(libxraymc)
 
 
-
+# Create an executable application
 add_executable(xraymcexample3 
 	src/main.cpp
     src/icrp110phantomreader.cpp
@@ -35,7 +35,7 @@ add_executable(xraymcexample3
 
 target_include_directories(xraymcexample3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
 target_link_libraries(xraymcexample3 PRIVATE libxraymc)
-#Adding data from xraymcCarm
+# Adding data from xraymcCarm
 xraymclib_add_physics_list(xraymcexample3)
 xraymclib_add_icrp145_organ_data(xraymcexample3)
 
@@ -60,6 +60,7 @@ set(DATA_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/data/exposureData/testExposure.csv"
 )
 
+# Copying data files to the build directory after building of the example
 foreach(datafile ${DATA_FILES})
     cmake_path(SET datapath "${datafile}")        
     cmake_path(GET datapath FILENAME datafilename)

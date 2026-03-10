@@ -24,7 +24,6 @@ Copyright 2024 Erlend Andersen
 
 #pragma once
 
-
 // Custom class to read ICRP 110 voxel phantoms
 // This class assumes that ICRP 110 files AF.dat AF_media.dat and AF_organs.dat
 // are in the build folder

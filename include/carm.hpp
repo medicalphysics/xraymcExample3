@@ -24,10 +24,9 @@ Copyright 2024 Erlend Andersen
 #include <string>
 
 template <int NMaterialShells = 5, int LOWENERGYCORRECTION = 2>
-class Carm
-{
+class Carm {
 public:
-    Carm(const std::string &path, std::size_t max_three_dept = 4)
+    Carm(const std::string& path, std::size_t max_three_dept = 4)
         : m_mesh(path, max_three_dept)
     {
         const auto carbon = xraymc::Material<NMaterialShells>::byZ(6).value();
@@ -38,14 +37,13 @@ public:
     void scale(double s)
     {
         m_mesh.scale(s);
-        for (std::size_t i = 0; i < 3; ++i)
-        {
+        for (std::size_t i = 0; i < 3; ++i) {
             m_source_pos[i] *= s;
             m_isocenter[i] *= s;
         }
     }
 
-    void rotate(const std::array<double, 3> &axis, double angle)
+    void rotate(const std::array<double, 3>& axis, double angle)
     {
         m_mesh.rotate(angle, axis);
 
@@ -57,7 +55,7 @@ public:
         m_beam_cosines[1] = xraymc::vectormath::rotate(m_beam_cosines[1], axis, angle);
     }
 
-    void translate(const std::array<double, 3> &translation)
+    void translate(const std::array<double, 3>& translation)
     {
         m_mesh.translate(translation);
         m_source_pos = xraymc::vectormath::add(m_source_pos, translation);
@@ -99,7 +97,7 @@ public:
         m_beam_cosines[0] = xraymc::vectormath::rotate(m_beam_cosines[0], m_yAxis, angle);
         m_beam_cosines[1] = xraymc::vectormath::rotate(m_beam_cosines[1], m_yAxis, angle);
     }
-    const std::array<double, 3> &center() const
+    const std::array<double, 3>& center() const
     {
         return m_isocenter;
     }
@@ -107,12 +105,12 @@ public:
     {
         return m_mesh.AABB();
     }
-    xraymc::WorldIntersectionResult intersect(const xraymc::ParticleType auto &p) const
+    xraymc::WorldIntersectionResult intersect(const xraymc::ParticleType auto& p) const
     {
         return m_mesh.intersect(p);
     }
     template <typename U>
-    xraymc::VisualizationIntersectionResult<U> intersectVisualization(const xraymc::ParticleType auto &p) const
+    xraymc::VisualizationIntersectionResult<U> intersectVisualization(const xraymc::ParticleType auto& p) const
     {
         return m_mesh.template intersectVisualization<U>(p);
     }
@@ -136,7 +134,7 @@ public:
     {
         m_mesh.addEnergyScoredToDoseScore(factor);
     }
-    void transport(xraymc::ParticleType auto &p, xraymc::RandomState &state)
+    void transport(xraymc::ParticleType auto& p, xraymc::RandomState& state)
     {
         m_mesh.transport(p, state);
     }
@@ -145,18 +143,23 @@ public:
     {
         return m_source_pos;
     }
-    const std::array<std::array<double, 3>, 2> &beamCosines() const
+    const std::array<std::array<double, 3>, 2>& beamCosines() const
     {
         return m_beam_cosines;
     }
 
+    std::array<double, 3> isoCenter() const
+    {
+        return m_isocenter;
+    }
+
 private:
     xraymc::TriangulatedMesh<NMaterialShells, LOWENERGYCORRECTION> m_mesh;
-    std::array<double, 3> m_source_pos = {0, 0, 0};
-    std::array<double, 3> m_isocenter = {0, 0, 55};
-    std::array<double, 3> m_xAxis = {1, 0, 0};
-    std::array<double, 3> m_yAxis = {0, 1, 0};
-    std::array<std::array<double, 3>, 2> m_beam_cosines = {{{1, 0, 0}, {0, 1, 0}}};
+    std::array<double, 3> m_source_pos = { 0, 0, 0 };
+    std::array<double, 3> m_isocenter = { 0, 0, 55 };
+    std::array<double, 3> m_xAxis = { 1, 0, 0 };
+    std::array<double, 3> m_yAxis = { 0, 1, 0 };
+    std::array<std::array<double, 3>, 2> m_beam_cosines = { { { 1, 0, 0 }, { 0, 1, 0 } } };
     double m_primary_angle = 0;
     double m_secondary_angle = 0;
 };
