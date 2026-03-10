@@ -203,7 +203,6 @@ std::vector<Media> readASCIIMedia(const std::string& media_path)
 
 void sanitizeIDs(std::vector<std::uint8_t>& organ_data, std::vector<Organ>& organs, std::vector<Media>& media)
 {
-
     // do we have all organs
     {
         // finding organ IDs in organ data;

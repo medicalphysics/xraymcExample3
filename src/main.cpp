@@ -1,19 +1,19 @@
-/*This file is part of xraymcCarm.
+/*This file is part of xraymcExample3.
 
-xraymcCarm is free software : you can redistribute it and/or modify
+xraymcExample3 is free software : you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation, either version 3 of the License, or
 (at your option) any later version.
 
-xraymcCarm is distributed in the hope that it will be useful,
+xraymcExample3 is distributed in the hope that it will be useful,
 but WITHOUT ANY WARRANTY; without even the implied warranty of
 MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License
-along with xraymcCarm. If not, see < https://www.gnu.org/licenses/>.
+along with xraymcExample3. If not, see < https://www.gnu.org/licenses/>.
 
-Copyright 2024 Erlend Andersen
+Copyright 2026 Erlend Andersen
 */
 
 #include "carm.hpp"
@@ -25,20 +25,12 @@ Copyright 2024 Erlend Andersen
 #include <xraymc/world/visualization/visualizeworld.hpp>
 #include <xraymc/world/world.hpp>
 #include <xraymc/world/worlditems/aavoxelgrid.hpp>
-#include <xraymc/world/worlditems/ctdiphantom.hpp>
 #include <xraymc/world/worlditems/enclosedroom.hpp>
 #include <xraymc/world/worlditems/tetrahedalmesh.hpp>
 #include <xraymc/world/worlditems/tetrahedalmesh/tetrahedalmeshreader.hpp>
 #include <xraymc/world/worlditems/triangulatedmesh.hpp>
 #include <xraymc/world/worlditems/triangulatedmesh/triangulatedmeshstlreader.hpp>
-#include <xraymc/world/worlditems/triangulatedopensurface.hpp>
 #include <xraymc/world/worlditems/worldbox.hpp>
-#include <xraymc/world/worlditems/worldcylinder.hpp>
-#include <xraymc/world/worlditems/worldsphere.hpp>
-
-#include <fstream>
-#include <iostream>
-#include <sstream>
 
 constexpr int MODEL = 2;
 constexpr int NSHELLS = 16;
@@ -62,8 +54,7 @@ static VGrid getICRP110Phantom(bool female = true)
     VGrid phantom;
 
     std::vector<Material> materials;
-    for (auto &w : phantom_data.mediaComposition())
-    {
+    for (auto& w : phantom_data.mediaComposition()) {
         auto mat_cand = Material::byWeight(w);
         if (mat_cand)
             materials.push_back(mat_cand.value());
@@ -90,8 +81,8 @@ static TetMesh readICRP145Phantom(bool female = true)
     xraymc::TetrahedalMeshReader reader(nodefile, elefile, mediafile, organfile);
 
     // rotating to upright position
-    reader.rotate({0, 0, 1}, std::numbers::pi_v<double>);
-    return TetMesh{reader.data()};
+    reader.rotate({ 0, 0, 1 }, std::numbers::pi_v<double>);
+    return TetMesh { reader.data() };
 }
 
 World constructWorld()
@@ -101,16 +92,16 @@ World constructWorld()
 
     // Start by adding the c-arm, CarmType is a custom type that reads a stl file looking like a c-arm
     // the stl file has origin at the source position for zero primary and secondary angles
-    auto &carm = world.template addItem<CarmType>({"carm.stl"}, "C-Arm");
-
-    // In this example we use the c-arm origin as world origin
+    auto& carm = world.template addItem<CarmType>({ "carm.stl" }, "C-Arm");
+    // In this example we use the c-arm isocenter as world origin
+    carm.translate(xraymc::vectormath::scale(carm.isoCenter(), -1.0));
 
     // Adding the patient table, this is a triangulated solid mesh
     xraymc::STLReader stlreader;
     stlreader.setFilePath("table.stl");
-    auto &table = world.template addItem<Mesh>({stlreader()}, "Table");
+    auto& table = world.template addItem<Mesh>({ stlreader() }, "Table");
     // translate the table (in cm)
-    table.translate({0, 0, 70});
+    table.translate({ 0, 0, 0 });
     const std::array<double, 6> table_aabb = table.AABB(); // get the bounding box of the table (X0 Y0 Z0 X1 Y1 Z1)
     // filling the table with carbon
     const auto carbon = Material::byZ(6).value();
@@ -118,32 +109,32 @@ World constructWorld()
     table.setMaterialDensity(0.2); // g/cm3
 
     // add a female ICRP 110 voxel phantom as patient
-    auto &patient = world.addItem(getICRP110Phantom(true), "Patient");
+    auto& patient = world.addItem(getICRP110Phantom(true), "Patient");
     // translate patient to lay on table
     auto patient_aabb = patient.AABB();
-    patient.translate({table_aabb[3] - patient_aabb[3], 0, table_aabb[5] - patient_aabb[2]});
+    patient.translate({ table_aabb[3] - patient_aabb[3], 0, table_aabb[5] - patient_aabb[2] });
 
     // Make a room of 2 mm lead
-    auto &room = world.template addItem<Room>("Room");
-    room.setInnerRoomAABB({-300, -200, -40, 200, 200, 230});
+    auto& room = world.template addItem<Room>("Room");
+    room.setInnerRoomAABB({ -300, -200, -100, 200, 200, 180 });
     room.setWallThickness(0.2);
     const auto lead = Material::byZ(82).value();
     const auto lead_dens = xraymc::AtomHandler::Atom(82).standardDensity;
     room.setMaterial(lead, lead_dens);
 
     // add a concrete floor
-    auto &floor = world.template addItem<Box>("Floor");
-    floor.setAABB({-299.99, -199.99, -39.99, 199.99, 199.99, -30});
+    auto& floor = world.template addItem<Box>("Floor");
+    floor.setAABB({ -299.99, -199.99, -99.99, 199.99, 199.99, -90 });
     const auto concrete = Material::byNistName("Concrete, Ordinary").value();
     const auto concrete_dens = xraymc::NISTMaterials::density("Concrete, Ordinary");
     floor.setMaterial(concrete, concrete_dens);
     auto floor_aabb = floor.AABB();
 
     // add a doctor
-    auto &doctor = world.template addItem<TetMesh>(readICRP145Phantom(false), "Doctor");
+    auto& doctor = world.template addItem<TetMesh>(readICRP145Phantom(false), "Doctor");
     const auto doctor_aabb = doctor.AABB();
     // make the doctor stand on the floor and beside the table
-    doctor.translate({0, table_aabb[1] - doctor_aabb[4] - 4, floor_aabb[5] - doctor_aabb[2]});
+    doctor.translate({ -50, table_aabb[1] - doctor_aabb[4] - 4, floor_aabb[5] - doctor_aabb[2] });
 
     // build the world
     world.build();
@@ -166,16 +157,16 @@ auto getBeam(std::uint64_t n_exposures, std::uint64_t n_particles)
     return beam;
 }
 
-void simulate(auto &world, auto &beam, std::uint32_t nThreads = 0)
+void simulate(auto& world, auto& beam, std::uint32_t nThreads = 0)
 {
     xraymc::Transport transport;
     transport.runConsole(world, beam, nThreads);
 }
 
-void visualizeWorld(const auto &world, const std::string &name = "world", double maxDose = 0, double zoom = 1)
+void visualizeWorld(const auto& world, const std::string& name = "world", double maxDose = 0, bool useLogColor = false, double zoom = 1)
 {
     // resolution
-    constexpr int resy = 1024 * 1;
+    constexpr int resy = 1024 * 4;
     constexpr int resx = (resy * 3) / 2;
 
     xraymc::VisualizeWorld viz(world);
@@ -186,30 +177,34 @@ void visualizeWorld(const auto &world, const std::string &name = "world", double
 
     // setting some colors
     std::array<std::uint8_t, 3> color;
-    color = {255, 195, 170}; // skin
+    color = { 255, 195, 170 }; // skin
     viz.setColorOfItem(world.getItemPointerFromName("Patient"), color);
     viz.setColorOfItem(world.getItemPointerFromName("Doctor"), color);
-    color = {117, 123, 130}; // cement
+    color = { 117, 123, 130 }; // cement
     viz.setColorOfItem(world.getItemPointerFromName("Floor"), color);
-    color = {242, 239, 223}; // ivory white
+    color = { 242, 239, 223 }; // ivory white
     viz.setColorOfItem(world.getItemPointerFromName("C-Arm"), color);
-    color = {55, 55, 55}; // carbon
+    color = { 55, 55, 55 }; // carbon
     viz.setColorOfItem(world.getItemPointerFromName("Table"), color);
-    color = {105, 155, 103}; // white green
+    color = { 105, 155, 103 }; // white green
     viz.setColorOfItem(world.getItemPointerFromName("Room"), color);
 
     std::string message;
-    auto to_string = [](int n) -> std::string
-    {
+    auto to_string = [](int n) -> std::string {
         std::stringstream ss;
         ss << std::setw(3) << std::setfill('0') << n;
         return ss.str();
     };
 
-    if (maxDose > 0)
-    {
+    if (maxDose > 0) {
         viz.addColorByValueItem(world.getItemPointerFromName("Doctor"));
-        viz.setColorByValueMinMax(0, maxDose);
+        viz.addColorByValueItem(world.getItemPointerFromName("Patient"));
+        if (useLogColor) {
+            viz.setColorByValueMinMax(maxDose / 10000.0, maxDose);
+            viz.setColorByValueLogScale(true);
+        } else {
+            viz.setColorByValueMinMax(0, maxDose);
+        }
     }
 
     constexpr int low_angle = 0;
@@ -217,8 +212,7 @@ void visualizeWorld(const auto &world, const std::string &name = "world", double
     constexpr int degStep = 30;
 
     viz.setAzimuthalAngleDeg(60);
-    for (int i = low_angle; i < high_angle; i = i + degStep)
-    {
+    for (int i = low_angle; i < high_angle; i = i + degStep) {
         std::string fn = name + to_string(i) + ".png";
         std::cout << std::string(message.length(), ' ') << "\r";
         message = "Generating " + fn;
@@ -251,8 +245,7 @@ int main()
     beam.setDAPvalue(1);
 
     auto carm = std::get_if<CarmType>(world.getItemPointerFromName("C-Arm"));
-    if (carm)
-    {
+    if (carm) {
         carm->setPrimaryAngleDeg(10);
         carm->setSecondaryAngleDeg(15);
         beam.setPosition(carm->beamSourcePos());
@@ -266,13 +259,13 @@ int main()
     transport.runConsole(world, beam);
 
     auto doctor = std::get_if<TetMesh>(world.getItemPointerFromName("Doctor"));
-    if (doctor)
-    {
+    if (doctor) {
         double max_dose = 0;
-        const auto &outerTetIdx = doctor->outerContourTetrahedronIndices();
+        const auto& outerTetIdx = doctor->outerContourTetrahedronIndices();
         for (std::size_t i = 0; i < outerTetIdx.size(); ++i)
             max_dose = std::max(max_dose, doctor->doseScored(outerTetIdx[i]).dose());
-        visualizeWorld(world, "dose", max_dose / 10.0);
+        visualizeWorld(world, "doseLog", max_dose / 10.0, true);
+        visualizeWorld(world, "dose", max_dose / 10.0, false);
     }
     return EXIT_SUCCESS;
 }
