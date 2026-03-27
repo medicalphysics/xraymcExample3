@@ -107,7 +107,6 @@ static TetMesh readICRP145Phantom(bool female = true)
 // Construct the world with all relevant items
 World constructWorld()
 {
-
     // Create world object
     World world;
 
@@ -193,7 +192,7 @@ World constructWorld()
     auto bc = blanket.center();
     // Position the blanket over the patient
     blanket.translate(xraymc::vectormath::scale(bc, -1.0));
-    blanket.translate({ -30, 0, table_aabb[5] - patient_aabb[2] + 8 });
+    blanket.translate({ -30, 0, table_aabb[5] - patient_aabb[2] + 10 });
     blanket.setMaterial(lead, lead_dens);
     blanket.setSurfaceThickness(0.05);
 
@@ -291,7 +290,44 @@ void visualizeWorld(const auto& world, auto* beam = nullptr, const std::string& 
     std::cout << std::string(message.length(), ' ') << "\r";
 }
 
-int main()
+void loadAndShowSimulation()
+{
+    const std::string filename { "world.xr" };
+    auto buffer_exp = xraymc::Serializer::read(filename);
+    if (!buffer_exp) {
+        std::cout << "Could not read saved file: " << filename << " ...exiting" << std::endl;
+        return;
+    }
+
+    const auto& buffer = buffer_exp.value();
+
+    auto world_buffer = xraymc::Serializer::getEmptyBuffer();
+    auto name = xraymc::Serializer::getNameIDTemplate();
+    auto buffer_remaining = xraymc::Serializer::deserializeItem(name, world_buffer, buffer);
+    auto world_opt = World::deserialize(world_buffer);
+    if (!world_opt) {
+        std::cout << "Could not reconstruct world from: " << filename << " ...exiting" << std::endl;
+        return;
+    }
+    auto& world = world_opt.value();
+
+    double max_dose = 0;
+    auto doctor = std::get_if<TetMesh>(world.getItemPointerFromName("Doctor"));
+    if (doctor) {
+        const auto& outerTetIdx = doctor->outerContourTetrahedronIndices();
+        for (std::size_t i = 0; i < outerTetIdx.size(); ++i)
+            max_dose = std::max(max_dose, doctor->doseScored(outerTetIdx[i]).dose());
+        // visualizeWorld(world, &beam, "doseLog", 1.5, max_dose / 10.0, true);
+        // visualizeWorld(world, &beam, "dose", 1.5, max_dose / 10.0, false);
+    }
+
+    xraymc::DXBeam<>* beam = nullptr;
+    // visualizeWorld(world, beam, "Readshow", 1.5);
+    //visualizeWorld(world, beam, "ReadDoseLog", 1.5, max_dose / 10.0, true);
+    visualizeWorld(world, beam, "ReaddoseLog", 1.5, max_dose / 10.0, true);
+}
+
+void runSimulation()
 {
     // create world
     auto world = constructWorld();
@@ -305,7 +341,7 @@ int main()
 
     beam.setCollimationHalfAnglesDeg(2, 2);
     beam.setNumberOfExposures(100);
-    beam.setNumberOfParticlesPerExposure(1E6);
+    beam.setNumberOfParticlesPerExposure(1E2);
     beam.setDAPvalue(1); // Normalization DAP value in mGycm^2
 
     auto carm = std::get_if<CarmType>(world.getItemPointerFromName("C-Arm"));
@@ -316,11 +352,19 @@ int main()
         beam.setDirectionCosines(carm->beamCosines());
     }
     world.build(); // build since geometry has changed
+
+    
+
     visualizeWorld(world, &beam, "show", 1.5);
 
     // simulate
     xraymc::Transport transport;
     transport.runConsole(world, beam);
+
+    // save world
+    auto saveBuffer = xraymc::Serializer::getEmptyBuffer();
+    xraymc::Serializer::serializeItem(world, saveBuffer);
+    xraymc::Serializer::write("world.xr", saveBuffer);
 
     auto doctor = std::get_if<TetMesh>(world.getItemPointerFromName("Doctor"));
     if (doctor) {
@@ -331,5 +375,11 @@ int main()
         visualizeWorld(world, &beam, "doseLog", 1.5, max_dose / 10.0, true);
         visualizeWorld(world, &beam, "dose", 1.5, max_dose / 10.0, false);
     }
+}
+
+int main()
+{
+    runSimulation();
+    loadAndShowSimulation();
     return EXIT_SUCCESS;
 }
