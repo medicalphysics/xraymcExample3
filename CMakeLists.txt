@@ -21,7 +21,7 @@ include(FetchContent)
 FetchContent_Declare(
     libxraymc # name of cmake target (you can chose)
     GIT_REPOSITORY https://github.com/medicalphysics/XRayMClib.git # Git address
-    GIT_TAG serializer # Git branch name (master for stable version) 
+    GIT_TAG develop # Git branch name (master for stable version) 
 )
 FetchContent_MakeAvailable(libxraymc)
 
