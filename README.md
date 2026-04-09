@@ -10,6 +10,7 @@ Running the example requires a C++ build environment, the build generator used b
 *Git LFS (Large file support)
 *CMake (install the CMake-GUI for a GUI interface)
 
+
 ### Command line instructions
 Start by cloning the xraymcExample3 repository, navigate to a folder you want the source code and clone the repository:
 git clone https://github.com/medicalphysics/xraymcExample3.git .
@@ -19,14 +20,11 @@ Create a build directory
 mkdir build
 
 Generate build files 
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build
 During this configure step CMake will download xraymc from GitHub and photon attenuation data from IAEA.
 
 Compile the the example
 cmake --build build --config Release --target xraymcexample3
 
-Run the example by 
-
-
-
+Run the example by running the xraymcexample3 executable in the build folder.
 
