@@ -30,7 +30,6 @@ FetchContent_MakeAvailable(libxraymc)
 add_executable(xraymcexample3 
 	src/main.cpp
     src/icrp110phantomreader.cpp
-    src/exposurereader.cpp
 )
 
 target_include_directories(xraymcexample3 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -57,7 +56,6 @@ set(DATA_FILES
     "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/table.stl"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/blanket.stl"
     "${CMAKE_CURRENT_SOURCE_DIR}/data/STL/ceilingShield.stl"
-    "${CMAKE_CURRENT_SOURCE_DIR}/data/exposureData/testExposure.csv"
 )
 
 # Copying data files to the build directory after building of the example
