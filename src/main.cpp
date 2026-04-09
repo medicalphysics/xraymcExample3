@@ -33,6 +33,8 @@ Copyright 2026 Erlend Andersen
 #include <xraymc/world/worlditems/triangulatedopensurface.hpp>
 #include <xraymc/world/worlditems/worldbox.hpp>
 
+#include <filesystem>
+
 // Set the low energu correction model
 // 0: No binding energy correction
 // 1: Livermore binding correction in Compton events
@@ -56,6 +58,9 @@ using Surface = xraymc::TriangulatedOpenSurface<NSHELLS, MODEL>;
 
 // Creating a world class from world template
 using World = xraymc::World<Mesh, VGrid, Room, TetMesh, CarmType, Box, Surface>;
+
+// Pretty beam name
+using Beam = xraymc::DXBeam<false>;
 
 // Making a pretty name for the material class
 using Material = xraymc::Material<NSHELLS>;
@@ -278,70 +283,89 @@ void visualizeWorld(const auto& world, auto* beam = nullptr, const std::string& 
     constexpr int degStep = 30;
     for (int i = low_angle; i < high_angle; i = i + degStep) {
         std::string fn = name + to_string(i) + ".png";
-        std::cout << std::string(message.length(), ' ') << "\r";
-        message = "Generating " + fn;
-        std::cout << message << std::flush << "\r";
         viz.setPolarAngleDeg(i);
         viz.suggestFOV(zoom); // Suggest camera FOV based on world size
         viz.generate(world, buffer); // Raytrace image
         viz.savePNG(fn, buffer); // Save image to png
     }
-
-    std::cout << std::string(message.length(), ' ') << "\r";
 }
 
-void loadAndShowSimulation()
+void loadAndShowSimulation(const std::string& filename)
 {
-    const std::string filename { "world.xr" };
-    auto buffer_exp = xraymc::Serializer::read(filename);
+    const auto buffer_exp = xraymc::Serializer::read(filename);
     if (!buffer_exp) {
-        std::cout << "Could not read saved file: " << filename << " ...exiting" << std::endl;
+        std::cout << "Could not read saved file: " << filename << " Exiting" << std::endl;
         return;
     }
 
-    const auto& buffer = buffer_exp.value();
+    std::cout << "Loading simulation from " << filename << "...";
 
+    // Getting the buffer
+    auto buffer = std::span { buffer_exp.value() };
+
+    // Loading the beam from file
+    auto beam_buffer = xraymc::Serializer::getEmptyBuffer();
+    auto beam_name = xraymc::Serializer::getNameIDTemplate();
+    buffer = xraymc::Serializer::deserializeItem(beam_name, beam_buffer, buffer);
+    // Create the beam object
+    auto beam_opt = Beam::deserialize(beam_buffer);
+    Beam* beam = nullptr;
+    if (beam_opt)
+        beam = &beam_opt.value();
+    else
+        beam = nullptr;
+
+    // Loading the world from file
     auto world_buffer = xraymc::Serializer::getEmptyBuffer();
-    auto name = xraymc::Serializer::getNameIDTemplate();
-    auto buffer_remaining = xraymc::Serializer::deserializeItem(name, world_buffer, buffer);
+    auto world_name = xraymc::Serializer::getNameIDTemplate();
+    buffer = xraymc::Serializer::deserializeItem(world_name, world_buffer, buffer);
     auto world_opt = World::deserialize(world_buffer);
     if (!world_opt) {
         std::cout << "Could not reconstruct world from: " << filename << " ...exiting" << std::endl;
         return;
     }
     auto& world = world_opt.value();
+    std::cout << "Done\n";
 
+    std::cout << "Generate some images of the setup...";
+    visualizeWorld(world, beam, "show", 1.5);
+    std::cout << "Done\n";
+
+    // If the world contains a doctor, we find the max skin dose
     double max_dose = 0;
     auto doctor = std::get_if<TetMesh>(world.getItemPointerFromName("Doctor"));
     if (doctor) {
         const auto& outerTetIdx = doctor->outerContourTetrahedronIndices();
         for (std::size_t i = 0; i < outerTetIdx.size(); ++i)
             max_dose = std::max(max_dose, doctor->doseScored(outerTetIdx[i]).dose());
-        // visualizeWorld(world, &beam, "doseLog", 1.5, max_dose / 10.0, true);
-        // visualizeWorld(world, &beam, "dose", 1.5, max_dose / 10.0, false);
     }
 
-    xraymc::DXBeam<>* beam = nullptr;
-    // visualizeWorld(world, beam, "Readshow", 1.5);
-    //visualizeWorld(world, beam, "ReadDoseLog", 1.5, max_dose / 10.0, true);
-    visualizeWorld(world, beam, "ReaddoseLog", 1.5, max_dose / 10.0, true);
+    // Visualize the skin dose
+    std::cout << "Generate some images of the scattered radiation...";
+    visualizeWorld(world, beam, "doseLog", 1.5, max_dose / 10.0, true);
+    visualizeWorld(world, beam, "dose", 1.5, max_dose / 10.0, false);
+    std::cout << "Done\n";
 }
 
-void runSimulation()
+void runSimulation(const std::string& filename)
 {
+    std::cout << "Starting simulation\n";
+
+    std::cout << "Building the world...";
     // create world
     auto world = constructWorld();
+    std::cout << "Done\n";
 
     // add a beam
-    xraymc::DXBeam<> beam;
+    Beam beam;
     beam.setTubeVoltage(65);
     beam.clearTubeFiltrationMaterials();
     beam.addTubeFiltrationMaterial(13, 3.5);
     beam.addTubeFiltrationMaterial(29, 0.1);
 
     beam.setCollimationHalfAnglesDeg(2, 2);
-    beam.setNumberOfExposures(100);
-    beam.setNumberOfParticlesPerExposure(1E2);
+    beam.setNumberOfExposures(128); // Number of jobs
+    beam.setNumberOfParticlesPerExposure(1E6); // Number of particles per job
     beam.setDAPvalue(1); // Normalization DAP value in mGycm^2
 
     auto carm = std::get_if<CarmType>(world.getItemPointerFromName("C-Arm"));
@@ -353,33 +377,32 @@ void runSimulation()
     }
     world.build(); // build since geometry has changed
 
-    
-
-    visualizeWorld(world, &beam, "show", 1.5);
-
-    // simulate
+    // Run the simulation
+    std::cout << "Running simulation with " << beam.numberOfParticles() << " particles\n";
     xraymc::Transport transport;
     transport.runConsole(world, beam);
 
-    // save world
+    // Save the simulation to a file
+    std::cout << "Saving simulation in " << filename<<"...";
     auto saveBuffer = xraymc::Serializer::getEmptyBuffer();
+    xraymc::Serializer::serializeItem(beam, saveBuffer);
     xraymc::Serializer::serializeItem(world, saveBuffer);
-    xraymc::Serializer::write("world.xr", saveBuffer);
-
-    auto doctor = std::get_if<TetMesh>(world.getItemPointerFromName("Doctor"));
-    if (doctor) {
-        double max_dose = 0;
-        const auto& outerTetIdx = doctor->outerContourTetrahedronIndices();
-        for (std::size_t i = 0; i < outerTetIdx.size(); ++i)
-            max_dose = std::max(max_dose, doctor->doseScored(outerTetIdx[i]).dose());
-        visualizeWorld(world, &beam, "doseLog", 1.5, max_dose / 10.0, true);
-        visualizeWorld(world, &beam, "dose", 1.5, max_dose / 10.0, false);
-    }
+    xraymc::Serializer::write(filename, saveBuffer);
+    std::cout << "Done\n";
 }
 
 int main()
 {
-    runSimulation();
-    loadAndShowSimulation();
+    // Lets test if we have already done a simulation
+    // if not we run it, to force a new simulation set force_new_simulation to true
+
+    const std::string savefile = "savefile.xr";
+
+    bool force_new_simulation = false;
+    if (!std::filesystem::exists(savefile) || force_new_simulation) {
+        runSimulation(savefile);
+    }
+
+    loadAndShowSimulation(savefile);
     return EXIT_SUCCESS;
 }
