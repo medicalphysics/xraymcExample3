@@ -72,6 +72,8 @@ static VGrid getICRP110Phantom(bool female = true)
     phantom.setData(phantom_data.dimensions(), phantom_data.densityData(), phantom_data.mediaData(), materials);
     phantom.setSpacing(phantom_data.spacing());
     // Flip and roll the phantom to make it lay on the table
+    // ICRP 110 data is stored head-up in the Z direction; roll twice then flip
+    // to reorient the phantom so it lies supine along the X axis on the table.
     phantom.rollAxis(2, 0);
     phantom.rollAxis(2, 1);
     phantom.flipAxis(2);
@@ -91,7 +93,7 @@ static TetMesh readICRP145Phantom(bool female = true)
     // Read tetrahedral data from disc
     xraymc::TetrahedalMeshReader reader(nodefile, elefile, mediafile, organfile);
 
-    // Rotating to upright position
+    // ICRP 145 meshes face the -Y direction by default; rotate 180° around Z to face +Y.
     reader.rotate({ 0, 0, 1 }, std::numbers::pi_v<double>);
     // Create tetrahedral object
     return TetMesh { reader.data() };
@@ -103,13 +105,15 @@ World constructWorld()
     // Create world object
     World world;
 
-    // Reserve number of items, only needed if returned references of added items are used
+    // Pre-allocating avoids internal reallocation that would invalidate the references
+    // returned by addItem() below (auto& carm, auto& table, etc.).
     world.reserveNumberOfItems(16);
 
     // Start by adding the c-arm, CarmType is a custom type that reads a stl file looking like a c-arm
     // the stl file has origin at the source position for zero primary and secondary angles
     auto& carm = world.template addItem<CarmType>({ "carm.stl" }, "C-Arm");
-    // In this example we use the c-arm isocenter as world origin
+    // Shift the entire C-arm so its isocenter lands at (0,0,0); all other objects
+    // are then positioned relative to that isocenter.
     carm.translate(xraymc::vectormath::scale(carm.isoCenter(), -1.0));
 
     // Adding the patient table, this is a triangulated solid mesh
@@ -194,7 +198,6 @@ World constructWorld()
     return world;
 }
 
-// Con
 void simulate(auto& world, auto& beam, std::uint32_t nThreads = 0)
 {
     xraymc::Transport transport;
@@ -352,8 +355,9 @@ void runSimulation(const std::string& filename)
     beam.addTubeFiltrationMaterial(29, 0.1);
 
     beam.setCollimationHalfAnglesDeg(2, 2);
-    beam.setNumberOfExposures(128); // Number of jobs
-    beam.setNumberOfParticlesPerExposure(1E6); // Number of particles per job
+    // 128 independent exposures each run on a separate thread; total histories = 128 × 1e6.
+    beam.setNumberOfExposures(128);
+    beam.setNumberOfParticlesPerExposure(1E6);
     beam.setDAPvalue(1); // Normalization DAP value in mGycm^2
 
     auto carm = std::get_if<CarmType>(world.getItemPointerFromName("C-Arm"));
@@ -363,7 +367,9 @@ void runSimulation(const std::string& filename)
         beam.setPosition(carm->beamSourcePos());
         beam.setDirectionCosines(carm->beamCosines());
     }
-    world.build(); // build since geometry has changed
+    // Rebuild after rotating the C-arm so the BVH acceleration structures
+    // reflect the updated triangle positions.
+    world.build();
 
     // Run the simulation
     std::cout << "Running simulation with " << beam.numberOfParticles() << " particles\n";

@@ -23,9 +23,13 @@ Copyright 2024 Erlend Andersen
 #include <array>
 #include <string>
 
+// C-arm fluoroscopy unit modelled as a triangulated STL mesh.
+// The STL file must have its X-ray source at the origin and the isocenter on
+// the +Z axis when both gantry angles are zero.
 template <int NMaterialShells = 5, int LOWENERGYCORRECTION = 2>
 class Carm {
 public:
+    // C-arm frames are carbon-fibre composite; material is fixed to carbon regardless of the STL content.
     Carm(const std::string& path, std::size_t max_three_dept = 4)
         : m_mesh(path, max_three_dept)
     {
@@ -34,6 +38,7 @@ public:
         m_mesh.setMaterial(carbon, carbon_dens);
     }
 
+    // Deserialization constructor: accepts a pre-built mesh (e.g. loaded from a save file).
     Carm(const xraymc::TriangulatedMesh<NMaterialShells, LOWENERGYCORRECTION>& mesh)
         : m_mesh(mesh)
     {
@@ -42,6 +47,8 @@ public:
         m_mesh.setMaterial(carbon, carbon_dens);
     }
 
+    // The mesh does not store source/isocenter positions, so they must be
+    // scaled explicitly to stay consistent with the geometry.
     void scale(double s)
     {
         m_mesh.scale(s);
@@ -51,6 +58,9 @@ public:
         }
     }
 
+    // World-space rotation (e.g. to tilt the whole unit into the room).
+    // All five tracked vectors are rotated so that subsequent primary/secondary
+    // angle calls remain correct relative to the new orientation.
     void rotate(const std::array<double, 3>& axis, double angle)
     {
         m_mesh.rotate(angle, axis);
@@ -63,6 +73,7 @@ public:
         m_beam_cosines[1] = xraymc::vectormath::rotate(m_beam_cosines[1], axis, angle);
     }
 
+    // Beam cosines and isocenter travel with the mesh; source position follows.
     void translate(const std::array<double, 3>& translation)
     {
         m_mesh.translate(translation);
@@ -70,15 +81,13 @@ public:
         m_isocenter = xraymc::vectormath::add(m_isocenter, translation);
     }
 
-    void setPrimaryAngleDeg(double angle)
-    {
-        setPrimaryAngle(angle * xraymc::DEG_TO_RAD<>());
-    }
-    void setSecondaryAngleDeg(double angle)
-    {
-        setSecondaryAngle(angle * xraymc::DEG_TO_RAD<>());
-    }
+    void setPrimaryAngleDeg(double angle) { setPrimaryAngle(angle * xraymc::DEG_TO_RAD<>()); }
+    void setSecondaryAngleDeg(double angle) { setSecondaryAngle(angle * xraymc::DEG_TO_RAD<>()); }
 
+    // Rotates the arm by the *delta* from the currently stored angle so that
+    // repeated calls are additive and the mesh is never rotated from a stale pose.
+    // The source orbits the isocenter: only the displacement vector is rotated,
+    // keeping the source-to-isocenter distance constant.
     void setPrimaryAngle(double new_angle)
     {
         const double angle = new_angle - m_primary_angle;
@@ -151,6 +160,8 @@ public:
     {
         return m_source_pos;
     }
+    // Two orthogonal unit vectors that define the detector plane orientation,
+    // passed directly to DXBeam::setDirectionCosines().
     const std::array<std::array<double, 3>, 2>& beamCosines() const
     {
         return m_beam_cosines;
@@ -161,6 +172,10 @@ public:
         return m_isocenter;
     }
 
+    // 32-byte identifier written at the start of every serialized buffer.
+    // Encodes the template parameters so deserialize() can reject a buffer that
+    // was saved with a different physics configuration (different NMaterialShells
+    // or LOWENERGYCORRECTION would produce incompatible cross-section tables).
     constexpr static std::array<char, 32> magicID()
     {
         std::string name = "CarmSTL1" + std::to_string(LOWENERGYCORRECTION) + std::to_string(NMaterialShells);
@@ -224,10 +239,12 @@ public:
 private:
     xraymc::TriangulatedMesh<NMaterialShells, LOWENERGYCORRECTION> m_mesh;
     std::array<double, 3> m_source_pos = { 0, 0, 0 };
-    std::array<double, 3> m_isocenter = { 0, 0, 55 };
+    std::array<double, 3> m_isocenter = { 0, 0, 55 }; // 55 cm SID in the STL's local frame
+    // Primary rotates around m_xAxis, secondary around m_yAxis; both axes are
+    // updated by rotate() so they always match the mesh's current orientation.
     std::array<double, 3> m_xAxis = { 1, 0, 0 };
     std::array<double, 3> m_yAxis = { 0, 1, 0 };
     std::array<std::array<double, 3>, 2> m_beam_cosines = { { { 1, 0, 0 }, { 0, 1, 0 } } };
-    double m_primary_angle = 0;
+    double m_primary_angle = 0;   // radians, current accumulated angle
     double m_secondary_angle = 0;
 };

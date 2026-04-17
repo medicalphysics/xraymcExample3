@@ -65,16 +65,21 @@ auto to_double(std::string_view s) -> std::optional<double>
         return std::nullopt;
 };
 
+// Reads an ICRP 110 voxel data file (.dat).
+// The format stores one organ ID per voxel as a 4-character fixed-width ASCII
+// integer (space-padded, e.g. " 142"), with tabs and newlines as delimiters.
+// Tabs and newlines are stripped first so the remaining bytes divide evenly
+// into 4-char fields that are parsed sequentially.
 std::vector<std::uint8_t> readASCIIData(const std::string& path)
 {
     std::ifstream t;
     std::vector<std::uint8_t> buffer;
-    t.open(path); // open input file
+    t.open(path);
     if (t.is_open()) {
-        t.seekg(0, std::ios::end); // go to the end
-        auto length = t.tellg(); // report location (this is the length)
+        t.seekg(0, std::ios::end);
+        auto length = t.tellg();
 
-        t.seekg(0, std::ios::beg); // go back to the beginning
+        t.seekg(0, std::ios::beg);
         std::string test(length, '0');
         t.read(&test[0], length);
         t.close();
@@ -118,11 +123,16 @@ std::vector<Organ> readASCIIOrgans(const std::string& organ_path)
 
     std::size_t lineNr = 0;
 
+    // ICRP 110 organ file fixed-column layout (1-indexed in the spec):
+    //  cols  1– 6 : organ ID
+    //  cols  7–55 : organ name
+    //  cols 56–58 : tissue/media ID (TNR)
+    //  cols 62–66 : density (g/cm³)
+    // The first 4 lines are a header.
     for (std::string line; std::getline(buffer, line);) {
         lineNr++;
         if (line.size() >= 66 && lineNr > 4) {
             Organ organ;
-            // ID
             auto IDs = line.substr(0, 6);
             auto ID = to_uchar(IDs);
             if (ID)
@@ -143,6 +153,7 @@ std::vector<Organ> readASCIIOrgans(const std::string& organ_path)
             organs.push_back(organ);
         }
     }
+    // ID 0 is reserved for background air voxels, which have no entry in the organ file.
     organs.push_back({ .name = "Air", .density = 0.001, .ID = 0, .mediaID = 0 });
 
     return organs;
@@ -170,9 +181,13 @@ std::vector<Media> readASCIIMedia(const std::string& media_path)
 
     for (std::string line; std::getline(buffer, line);) {
         lineNr++;
+        // ICRP 110 media file fixed-column layout:
+        //  cols  1– 6 : media ID
+        //  cols  7–78 : media name
+        //  cols 77+   : weight fractions for 13 elements, 6 chars each
+        // The first 3 lines are a header.
         if (line.size() >= 154 && lineNr > 3) {
             Media media;
-            // ID
             auto IDs = line.substr(0, 6);
             auto ID = to_uchar(IDs);
             if (ID)
@@ -181,7 +196,8 @@ std::vector<Media> readASCIIMedia(const std::string& media_path)
             trim(name);
             media.name = name;
 
-            // composition
+            // The 13 elements listed in the ICRP 110 media composition table:
+            // H, C, N, O, Na, Mg, P, S, Cl, K, Ca, Fe, I
             const std::array Zs = { 1, 6, 7, 8, 11, 12, 15, 16, 17, 19, 20, 26, 53 };
             for (std::size_t i = 0; i < Zs.size(); ++i) {
                 constexpr std::size_t offset = 76;
@@ -197,6 +213,7 @@ std::vector<Media> readASCIIMedia(const std::string& media_path)
         }
     }
 
+    // ID 0 is background air (80 % N, 20 % O by weight), not listed in the media file.
     medias.push_back({ .ID = 0, .composition = { { 7, 80.0 }, { 8, 20.0 } }, .name = "Air" });
     return medias;
 }
@@ -237,7 +254,8 @@ void sanitizeIDs(std::vector<std::uint8_t>& organ_data, std::vector<Organ>& orga
             }
         }
 
-        // making organ IDs consecutive
+        // xraymc uses organ IDs as direct array indices, so they must be
+        // 0-based and contiguous after unused organs have been removed.
         std::sort(organs.begin(), organs.end(), [](const auto& lh, const auto& rh) { return lh.ID < rh.ID; });
         for (std::uint8_t i = 0; i < organs.size(); ++i) {
             if (organs[i].ID != i) {
@@ -278,7 +296,7 @@ void sanitizeIDs(std::vector<std::uint8_t>& organ_data, std::vector<Organ>& orga
             }
         }
         std::sort(media.begin(), media.end(), [](const auto& lh, const auto& rh) { return lh.ID < rh.ID; });
-        // making media consecutive
+        // Same compaction requirement for media IDs.
         for (std::uint8_t i = 0; i < media.size(); ++i) {
             if (media[i].ID != i) {
                 for (auto& o : organs) {
@@ -298,6 +316,8 @@ ICRP110PhantomReader ICRP110PhantomReader::readPhantom(const std::string& phanto
 
     ICRP110PhantomReader data;
 
+    // Grid dimensions and voxel spacing (cm) are fixed publication values from
+    // ICRP Publication 110 and do not appear in the data files themselves.
     if constexpr (FEMALE) {
         data.m_dim = { 299, 137, 348 };
         data.m_spacing = { .1775, .1775, .484 };
@@ -308,6 +328,7 @@ ICRP110PhantomReader ICRP110PhantomReader::readPhantom(const std::string& phanto
     const auto size = std::reduce(data.m_dim.cbegin(), data.m_dim.cend(), std::size_t { 1 }, std::multiplies<>());
     data.m_organ_data = readASCIIData(phantom_path);
 
+    // Return an empty phantom rather than reading garbage if the file is missing or truncated.
     if (size != data.m_organ_data.size())
         return data;
 
