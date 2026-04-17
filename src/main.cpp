@@ -19,19 +19,7 @@ Copyright 2026 Erlend Andersen
 #include "carm.hpp"
 #include "icrp110phantomreader.hpp"
 
-#include <xraymc/beams/dxbeam.hpp>
-#include <xraymc/material/material.hpp>
-#include <xraymc/transport.hpp>
-#include <xraymc/world/visualization/visualizeworld.hpp>
-#include <xraymc/world/world.hpp>
-#include <xraymc/world/worlditems/aavoxelgrid.hpp>
-#include <xraymc/world/worlditems/enclosedroom.hpp>
-#include <xraymc/world/worlditems/tetrahedalmesh.hpp>
-#include <xraymc/world/worlditems/tetrahedalmesh/tetrahedalmeshreader.hpp>
-#include <xraymc/world/worlditems/triangulatedmesh.hpp>
-#include <xraymc/world/worlditems/triangulatedmesh/triangulatedmeshstlreader.hpp>
-#include <xraymc/world/worlditems/triangulatedopensurface.hpp>
-#include <xraymc/world/worlditems/worldbox.hpp>
+#include "xraymc/xraymc.hpp"
 
 #include <filesystem>
 
@@ -383,7 +371,7 @@ void runSimulation(const std::string& filename)
     transport.runConsole(world, beam);
 
     // Save the simulation to a file
-    std::cout << "Saving simulation in " << filename<<"...";
+    std::cout << "Saving simulation in " << filename << "...";
     auto saveBuffer = xraymc::Serializer::getEmptyBuffer();
     xraymc::Serializer::serializeItem(beam, saveBuffer);
     xraymc::Serializer::serializeItem(world, saveBuffer);
